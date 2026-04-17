@@ -1,150 +1,131 @@
-// loader
-import { LazyLoadImage } from "react-lazy-load-image-component";
-import LoadingBar from "react-top-loading-bar";
-// react
 import React, { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-// index file
-import { PinsGrid, Button } from "../components/index";
-// appwrite
+import { useParams } from "react-router-dom";
+import { LazyLoadImage } from "react-lazy-load-image-component";
+
+import { PinsGrid, Button } from "../components";
 import appwriteService from "../appwrite/config";
 import { Query } from "appwrite";
-// redux
+
 import { useSelector } from "react-redux";
-import authservice from "@/appwrite/auth";
 
 const Profile = () => {
-  // states
   const { userId } = useParams();
-  const [userIdFORstate, setUserIdFORstate] = useState();
-  const [loading, setLoading] = useState(false);
-  const [progress, setProgress] = useState(70);
-  const [autherDp, setAutherDp] = useState();
-  const [auther, setAuther] = useState();
-  const [pins, setPins] = useState([]);
-  const [saved, setSaved] = useState([]);
-  const [nonUserSaved, setNonUserSaved] = useState();
-  const [toggle, setToggle] = useState(false);
-  const [isLogedinUser, setisLogedinUser] = useState();
 
-  // redux
-  const savedpins_Store = useSelector((state) => state.pins.savedPinsDATA);
   const { userdata, prefs } = useSelector((state) => state.authStatus);
+  const savedStore = useSelector((state) => state.pins.savedPinsDATA);
 
-  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [isOwner, setIsOwner] = useState(false);
 
-  // functions
-  const LoadingHandler = () => {
-    setLoading(true);
-    setProgress(100);
-  };
+  const [author, setAuthor] = useState("");
+  const [authorDp, setAuthorDp] = useState("");
 
-  const getUserDetails = async () => {
-    const user = userId == userdata.$id ? true : false;
-    setisLogedinUser(user);
-    const res = await appwriteService
-      .ListPosts([Query.equal("userId", userId)])
-      .then((post) => (post ? setPins(post) : false));
+  const [pins, setPins] = useState([]);
+  const [savedPins, setSavedPins] = useState([]);
 
-    if (pins.total > 0) {
-      setAutherDp(pins.documents[0].autherDp);
-      setAuther(pins.documents[0].auther);
-    } else {
-      if (isLogedinUser) {
-        setAuther(userdata.name);
-        setAutherDp(prefs.displayPicture);
-      }
-    }
-  };
+  const [showSaved, setShowSaved] = useState(false);
 
-  const getSavedPins = async () => {
-    if (isLogedinUser) {
-      setSaved(savedpins_Store);
-    } else {
+  // ================= FETCH DATA =================
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+
       try {
-        await appwriteService
-          .ListSavePosts(userId)
-          .then((posts) => setNonUserSaved(posts.documents));
+        const owner = userId === userdata?.$id;
+        setIsOwner(owner);
 
-        if (nonUserSaved) {
-          const postIds = nonUserSaved.map((item) => item.pinId);
+        // ===== USER PINS =====
+        const postRes = await appwriteService.ListPosts([
+          Query.equal("userId", userId),
+        ]);
 
-          if (postIds) {
-            await appwriteService
-              .ListPosts([Query.equal("$id", postIds)])
-              .then((post) =>
-                post.total >= 0 ? setSaved(post.documents) : null
-              );
+        setPins(postRes.documents || []);
+
+        // ===== AUTHOR INFO =====
+        if (postRes.documents.length > 0) {
+          setAuthor(postRes.documents[0].auther);
+          setAuthorDp(postRes.documents[0].autherDp);
+        } else if (owner) {
+          setAuthor(userdata.name);
+          setAuthorDp(prefs.displayPicture);
+        }
+
+        // ===== SAVED PINS =====
+        if (owner) {
+          setSavedPins(savedStore || []);
+        } else {
+          const savedRes = await appwriteService.ListSavePosts(userId);
+
+          const ids = savedRes.documents.map((i) => i.pinId);
+
+          if (ids.length > 0) {
+            const posts = await appwriteService.ListPosts([
+              Query.equal("$id", ids),
+            ]);
+
+            setSavedPins(posts.documents || []);
+          } else {
+            setSavedPins([]);
           }
         }
-      } catch (error) {
-        console.log(error);
+      } catch (err) {
+        console.log(err);
+      } finally {
+        setLoading(false);
       }
-    }
-  };
+    };
 
-  const buttonHandler = (e) => {
-    const button = e.target.id;
-    if (button == "Create") {
-      setToggle(false);
-    } else {
-      setToggle(true);
-    }
-  };
+    fetchData();
+  }, [userId]);
 
-  // useEffect's
-  useEffect(() => {
-    // setUser ID
-    setUserIdFORstate(userId);
-    // getting user Details and pins he/her posted
-    getUserDetails();
-    // getting user Save pins
-    getSavedPins();
-  }, [pins, saved, userId]);
-
+  // ================= UI =================
   return (
-    <div className="w-full">
-      <div className="flex flex-col items-center p-6">
-        <LoadingBar
-          color="#f11946"
-          progress={progress}
-          onLoaderFinished={LoadingHandler}
-        />
+    <div className="w-full min-h-screen bg-white">
+      {/* PROFILE HEADER */}
+      <div className="flex flex-col items-center py-10">
+        {/* DP */}
         <LazyLoadImage
-          onLoad={LoadingHandler}
-          id={pins.$id}
-          // src={appwriteService.getFilePreview(autherDp ? autherDp : null)}
-          src={`https://fra.cloud.appwrite.io/v1/storage/buckets/66d801490026bec522c7/files/${autherDp}/view?project=66d70efe003c16e69527&mode=admin`}
-          alt={`Image ${pins.$id}`}
+          src={authorDp}
+          alt={author}
           effect="blur"
-          className="rounded-full w-24 h-24 object-cover"
+          className="w-28 h-28 rounded-full object-cover"
         />
-        {loading && <h1 className="text-2xl font-semibold mt-4">{auther}</h1>}
 
-        {loading && (
-          <div className="flex mt-6 space-x-8 ">
-            <Button
-              text="Created"
-              bgColor={toggle ? "bg-transparent" : "bg-black"}
-              textColor={toggle ? "text-gray-800" : "text-white"}
-              id="Create"
-              onClick={buttonHandler}
-            />
-            <Button
-              text="Saved"
-              bgColor={toggle ? "bg-black" : " bg-transparent"}
-              textColor={toggle ? "text-white" : "text-gray-800"}
-              id="save"
-              onClick={buttonHandler}
-            />
-          </div>
+        {/* NAME */}
+        <h1 className="text-2xl font-semibold mt-4">
+          {loading ? "Loading..." : author}
+        </h1>
+
+        {/* BUTTONS */}
+        <div className="flex gap-4 mt-6">
+          <button
+            onClick={() => setShowSaved(false)}
+            className={`px-5 py-2 rounded-full text-sm font-medium transition ${
+              !showSaved ? "bg-black text-white" : "bg-gray-200 text-gray-800"
+            }`}
+          >
+            Created
+          </button>
+
+          <button
+            onClick={() => setShowSaved(true)}
+            className={`px-5 py-2 rounded-full text-sm font-medium transition ${
+              showSaved ? "bg-black text-white" : "bg-gray-200 text-gray-800"
+            }`}
+          >
+            Saved
+          </button>
+        </div>
+      </div>
+
+      {/* PINS GRID */}
+      <div className="px-4">
+        {loading ? (
+          <p className="text-center text-gray-500">Loading pins...</p>
+        ) : (
+          <PinsGrid pin={showSaved ? savedPins : pins} userPins={true} />
         )}
       </div>
-      {loading && (
-        <div className="w-full">
-          <PinsGrid pin={toggle ? saved : pins.documents} userPins={true} />
-        </div>
-      )}
     </div>
   );
 };

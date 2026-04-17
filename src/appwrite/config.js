@@ -22,12 +22,26 @@ class Service {
     tag,
     pinID,
     userId,
+    imagePublicID,
     image,
     status,
     auther,
     autherDp,
   }) {
     try {
+      console.log(
+        title,
+        description,
+        board,
+        tag,
+        pinID,
+        userId,
+        image,
+        status,
+        auther,
+        autherDp,
+      );
+
       return await this.databases.createDocument(
         conf.appwriteDatabaseId,
         conf.appwriteCollectionId,
@@ -40,10 +54,11 @@ class Service {
           pinID,
           userId,
           image,
+          imagePublicID,
           status,
           auther,
           autherDp,
-        }
+        },
       );
     } catch (error) {
       console.log("CreatePost :", error);
@@ -63,7 +78,7 @@ class Service {
           board,
           tag,
           description,
-        }
+        },
       );
     } catch (error) {
       console.log("UpdatePost", error);
@@ -76,7 +91,7 @@ class Service {
       await this.databases.deleteDocument(
         conf.appwriteDatabaseId,
         conf.appwriteCollectionId,
-        postID
+        postID,
       );
       return true;
     } catch (error) {
@@ -90,7 +105,7 @@ class Service {
       return await this.databases.getDocument(
         conf.appwriteDatabaseId,
         conf.appwriteCollectionId,
-        postID
+        postID,
       );
     } catch (error) {
       console.log("GetPost :", error);
@@ -103,7 +118,7 @@ class Service {
       return await this.databases.listDocuments(
         conf.appwriteDatabaseId,
         conf.appwriteCollectionId,
-        queries
+        queries,
       );
     } catch (error) {
       console.log("ListPosts :", error);
@@ -118,7 +133,7 @@ class Service {
       return await this.bucket.createFile(
         conf.appwriteBucketId,
         ID.unique(),
-        file
+        file,
       );
     } catch (error) {
       console.log("Appwrite serive :: uploadFile :: error", error);
@@ -150,7 +165,7 @@ class Service {
         {
           userId,
           pinId,
-        }
+        },
       );
     } catch (error) {
       console.log("addSavePost :", error);
@@ -163,7 +178,7 @@ class Service {
       return await this.databases.listDocuments(
         conf.appwriteDatabaseId,
         conf.appwriteSavedCollection,
-        [Query.equal("userId", userId)]
+        [Query.equal("userId", userId)],
       );
     } catch (error) {
       console.log("ListSavePosts :", error);
@@ -176,7 +191,7 @@ class Service {
       return await this.databases.deleteDocument(
         conf.appwriteDatabaseId,
         conf.appwriteSavedCollection,
-        postId
+        postId,
       );
     } catch (error) {
       console.log("DeleteSavedPost :", error);

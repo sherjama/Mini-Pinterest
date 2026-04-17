@@ -1,321 +1,204 @@
-// icons
+import React, { useEffect, useState } from "react";
+import { LazyLoadImage } from "react-lazy-load-image-component";
 import { ThreeCircles } from "react-loader-spinner";
 import { TiTickOutline } from "react-icons/ti";
 import { MdDelete } from "react-icons/md";
 import { TbEdit } from "react-icons/tb";
 import { BsThreeDotsVertical } from "react-icons/bs";
-// shadcn
+
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-// react
-import React, { useEffect, useState } from "react";
-// index file
-import { Button } from "../components/index";
-// lazy load image
-import { LazyLoadImage } from "react-lazy-load-image-component";
-// appwrite
+
 import appwriteService from "../appwrite/config";
-// react-router-dom
 import { useNavigate, useParams } from "react-router-dom";
-// redux
 import { useSelector, useDispatch } from "react-redux";
-import { setLoading } from "../store/loadSlice";
-import { saved } from "@/store/pinSlice";
+import { saved as setSaved } from "@/store/pinSlice";
+import { deleteImage } from "@/cloudinary/delete";
 
 const Post = () => {
-  // states
-  const [isloading, setIsLoading] = useState(true);
-  const [onSaveLoading, setOnSaveLoading] = useState();
-  const [post, setPost] = useState({});
-  const [autherDP, setAutherDP] = useState();
-  const [istAuther, setIstAuther] = useState();
-  const [postImg, setPostImg] = useState();
-  const [isSaved, setIsSaved] = useState(false);
   const { postid } = useParams();
-
-  // redux
-  const dispatch = useDispatch();
-  const logedinUser = useSelector((state) => state.authStatus.userdata);
-  const saved_posts = useSelector((state) => state.pins.savedPins);
-
-  // router-dom
   const navigate = useNavigate();
+  const dispatch = useDispatch();
 
-  // useEffect's
+  const user = useSelector((state) => state.authStatus.userdata);
+  const savedPosts = useSelector((state) => state.pins.savedPins);
+
+  const [post, setPost] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saveLoading, setSaveLoading] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
+
+  const isAuthor = post?.userId === user?.$id;
+
+  // ================= FETCH POST =================
   useEffect(() => {
-    postid
-      ? appwriteService
-          .GetPost(postid)
-          .then((res) => (res ? setPost(res) : null))
-      : null;
-
-    checkIsSaved();
-  }, [saved_posts]);
-
-  useEffect(() => {
-    setAutherDP(post.autherDp);
-    setPostImg(post.image);
-    if (post) {
-      if (post.userId == logedinUser.$id) {
-        setIstAuther(true);
-      } else {
-        setIstAuther(false);
+    const fetchPost = async () => {
+      try {
+        const res = await appwriteService.GetPost(postid);
+        setPost(res);
+      } catch (err) {
+        console.log(err);
+      } finally {
+        setLoading(false);
       }
-    }
-  }, [post, setPost]);
-
-  useEffect(() => {
-    if (!isloading) {
-      dispatch(setLoading(false));
-    }
-    return () => {
-      dispatch(setLoading(true));
     };
-  }, [isloading]);
 
-  // functions
+    fetchPost();
+  }, [postid]);
+
+  // ================= CHECK SAVED =================
+  useEffect(() => {
+    const exists = savedPosts?.some((item) => item.pinId === postid);
+    setIsSaved(exists);
+  }, [savedPosts, postid]);
+
+  // ================= DELETE =================
   const deletePost = async () => {
-    // first we unsave the post then delete it
-    await unSavePost();
     try {
-      await appwriteService
-        .deleteFile(post.image)
-        .then(await appwriteService.DeletePost(post.$id))
-        .then(navigate(`/profile/${post.userId}`));
-    } catch (error) {
-      alert(error.message);
-      console.log("component Post :", error);
-    }
-  };
-
-  const unSavePost = async () => {
-    if (isSaved) {
-      const check = saved_posts.filter((item) => item.pinId == postid);
-
-      if (check) {
-        const res = await appwriteService.DeleteSavedPost(check[0].$id);
-
-        if (res) setOnSaveLoading(false);
+      // delete image from cloudinary
+      if (post.imagePublicID) {
+        await deleteImage(post.imagePublicID);
       }
+
+      // delete post
+      await appwriteService.DeletePost(post.$id);
+
+      navigate(`/profile/${post.userId}`);
+    } catch (err) {
+      console.log(err);
     }
   };
 
-  const savePost = async () => {
-    console.log("lkjslk");
+  // ================= SAVE / UNSAVE =================
+  const toggleSave = async () => {
+    if (!user) return;
 
-    // desigined DATA
-    const data = {
-      userId: logedinUser.$id,
-      pinId: postid,
-    };
+    setSaveLoading(true);
 
-    // conditions
-    if (!isSaved) {
-      if (data) {
-        // savepost
-        try {
-          setOnSaveLoading(true);
-          const res = await appwriteService.addSavePost(data);
-
-          if (res) {
-            const response = await appwriteService
-              .ListSavePosts(logedinUser.$id)
-              .then((posts) => {
-                posts.total >= 0 ? dispatch(saved(posts)) : null;
-              });
-
-            setOnSaveLoading(false);
-          }
-        } catch (error) {
-          console.log("savePost :", error);
+    try {
+      if (!isSaved) {
+        await appwriteService.addSavePost({
+          userId: user.$id,
+          pinId: postid,
+        });
+      } else {
+        const found = savedPosts.find((i) => i.pinId === postid);
+        if (found) {
+          await appwriteService.DeleteSavedPost(found.$id);
         }
       }
-    } else if (isSaved) {
-      setOnSaveLoading(true);
-      // unsave post
-      unSavePost();
+
+      // refresh saved pins
+      const res = await appwriteService.ListSavePosts(user.$id);
+      dispatch(setSaved(res.documents));
+    } catch (err) {
+      console.log(err);
+    } finally {
+      setSaveLoading(false);
     }
   };
 
-  const checkIsSaved = () => {
-    const save = saved_posts.map((item) =>
-      item.pinId == postid ? true : false
+  // ================= UI =================
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <ThreeCircles height="50" width="50" />
+      </div>
     );
-
-    if (save.includes(true)) {
-      setIsSaved(true);
-    } else {
-      setIsSaved(false);
-    }
-  };
+  }
 
   return (
-    <div className="flex justify-center items-center min-h-screen ">
-      <div className="rounded-xl shadow-lg overflow-hidden w-3/4 max-w-[52rem] max-sm:w-[98%]  min-h-[75vh] mt-[2vw] p-2 ">
-        {/* DELETE and UPDATE btn  */}
-        <div className="cursor-pointer px-2 pt-4">
-          {istAuther && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button>
-                  <BsThreeDotsVertical size={35} color="gray" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56">
-                <DropdownMenuLabel>{post.title}</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuGroup>
-                  <DropdownMenuItem
-                    onClick={() => navigate(`/creation-pin/update-${post.$id}`)}
-                  >
-                    {/* Edit and Delete btn  */}
-                    <span>Update</span>
-
-                    <DropdownMenuShortcut>
-                      <Button
-                        text={<TbEdit color="blue" size={35} />}
-                        className="bg-gray-400 rounded-full rounded-bl-sm font-Primary"
-                        bgColor="bg-transparnt"
-                      />
-                    </DropdownMenuShortcut>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={deletePost}>
-                    <span>Delete</span>
-
-                    <DropdownMenuShortcut>
-                      <Button
-                        text={<MdDelete color="red" size={35} />}
-                        className="bg-gray-400 rounded-full rounded-bl-sm font-Primary"
-                        bgColor="bg-transparnt"
-                      />
-                    </DropdownMenuShortcut>
-                  </DropdownMenuItem>
-                </DropdownMenuGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+    <div className="flex justify-center px-4 py-10 bg-[#f1f1f1] min-h-screen">
+      <div className="bg-white rounded-3xl shadow-lg max-w-5xl w-full flex flex-col md:flex-row overflow-hidden">
+        {/* IMAGE */}
+        <div className="md:w-1/2 bg-gray-100">
+          <LazyLoadImage
+            src={post.image}
+            alt={post.title}
+            effect="blur"
+            className="w-full h-full object-cover"
+          />
         </div>
-        {/* container  */}
-        <div className="flex h-full flex-wrap  justify-center w-full">
-          {/* image  */}
-          <div>
-            <LazyLoadImage
-              onLoad={() => setIsLoading(false)}
-              id={post.$id}
-              // src={appwriteService.getFilePreview(postImg ? postImg : null)}
-              src={`https://fra.cloud.appwrite.io/v1/storage/buckets/66d801490026bec522c7/files/${postImg}/view?project=66d70efe003c16e69527&mode=admin`}
-              alt={`Image ${post.$id}`}
-              effect="blur"
-              className="w-full min-[385px]: object-contain rounded-3xl"
-            />
-          </div>
-          {/* post details  */}
-          {!isloading && (
-            <div className="w-full  flex items-center justify-start">
-              <div className="sm:p-6 w-full   flex flex-col min-h-96  sm:ml-5">
-                {/* description and title  */}
-                <div>
-                  <h1 className="text-3xl font-bold mt-4 text-gray-950 font-Primary ">
-                    {post.title}
-                  </h1>
-                  <p className="text-gray-600 font-Primary">
-                    {post.description}
-                  </p>
-                </div>
-                <div className="flex items-center justify-between mt-10   ">
-                  <div className="flex items-center ">
-                    <LazyLoadImage
-                      id={post.$id}
-                      // src={appwriteService.getFilePreview(
-                      //   autherDP ? autherDP : null
-                      // )}
-                      src={`https://fra.cloud.appwrite.io/v1/storage/buckets/66d801490026bec522c7/files/${autherDP}/view?project=66d70efe003c16e69527&mode=admin`}
-                      alt={`Image ${post.$id}`}
-                      effect="blur"
-                      className="size-12 rounded-full object-cover"
-                    />
-                    <div className="ml-3 ">
-                      <p className="text-gray-600 underline font-Secondary text-xl ">
-                        {post.auther}
-                      </p>
-                    </div>
-                  </div>
 
-                  <div className="flex space-x-3 ">
-                    <Button
-                      text="profile"
-                      className="ml-auto  px-4 py-2 rounded-full font-Secondary"
-                      onClick={() => navigate(`/profile/${post.userId}`)}
-                    />
-                    {/* save btn  */}
-                    <Button
-                      text={
-                        isSaved ? `saved ` : `${onSaveLoading ? "" : "save"}`
-                      }
-                      className="px-4 py-2 rounded-full float-end font-Primary transition-all ease-in max-sm:hidden"
-                      onClick={savePost}
-                      bgColor={
-                        isSaved ? "bg-green-600 uppercase" : "bg-gray-500"
+        {/* RIGHT CONTENT */}
+        <div className="md:w-1/2 p-6 flex flex-col justify-between">
+          {/* TOP */}
+          <div>
+            {/* MENU */}
+            {isAuthor && (
+              <div className="flex justify-end">
+                <DropdownMenu>
+                  <DropdownMenuTrigger>
+                    <BsThreeDotsVertical size={22} />
+                  </DropdownMenuTrigger>
+
+                  <DropdownMenuContent>
+                    <DropdownMenuItem
+                      onClick={() =>
+                        navigate(`/creation-pin/update-${post.$id}`)
                       }
                     >
-                      {onSaveLoading && (
-                        <ThreeCircles
-                          visible={true}
-                          height="30"
-                          width="30"
-                          color="#ffff"
-                          ariaLabel="three-circles-loading"
-                          wrapperStyle={{}}
-                          wrapperClass=""
-                        />
-                      )}
-                      {isSaved && !onSaveLoading ? <TiTickOutline /> : null}
-                    </Button>
-                  </div>
-                </div>
+                      <TbEdit className="mr-2" /> Edit
+                    </DropdownMenuItem>
+
+                    <DropdownMenuItem onClick={deletePost}>
+                      <MdDelete className="mr-2 text-red-500" /> Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
-            </div>
-          )}
-        </div>
-        {/* explore btn  */}
-        {!isloading && (
-          <div className="p-4  flex justify-end relative bottom-0 flex-wrap">
-            <Button
-              text="More to explore"
-              className="px-4 py-2 rounded-full float-end font-Primary"
-              bgColor="bg-gray-950"
-              onClick={() => navigate("/home")}
-            />
-            {/* save btn  */}
-            <Button
-              text={isSaved ? `saved ` : `${onSaveLoading ? "" : "save"}`}
-              className="px-4 py-2 rounded-full float-end font-Primary transition-all ease-in sm:hidden"
-              onClick={savePost}
-              bgColor={isSaved ? "bg-green-600 uppercase" : "bg-gray-500"}
+            )}
+
+            {/* TITLE */}
+            <h1 className="text-2xl font-bold mt-4">{post.title}</h1>
+
+            {/* DESC */}
+            <p className="text-gray-600 mt-2">{post.description}</p>
+
+            {/* AUTHOR */}
+            <div
+              onClick={() => navigate(`/profile/${post.userId}`)}
+              className="flex items-center gap-3 mt-6 cursor-pointer"
             >
-              {onSaveLoading && (
-                <ThreeCircles
-                  visible={true}
-                  height="30"
-                  width="30"
-                  color="#ffff"
-                  ariaLabel="three-circles-loading"
-                  wrapperStyle={{}}
-                  wrapperClass=""
-                />
-              )}
-              {isSaved ? <TiTickOutline /> : null}
-            </Button>
+              <img
+                src={post.autherDp}
+                className="w-10 h-10 rounded-full object-cover"
+              />
+              <span className="text-sm font-medium">{post.auther}</span>
+            </div>
           </div>
-        )}
+
+          {/* ACTIONS */}
+          <div className="flex justify-between items-center mt-6">
+            <button
+              onClick={() => navigate(`/profile/${post.userId}`)}
+              className="bg-gray-200 px-4 py-2 rounded-full text-sm"
+            >
+              Profile
+            </button>
+
+            <button
+              onClick={toggleSave}
+              className={`px-5 py-2 rounded-full text-sm font-medium flex items-center gap-2 ${
+                isSaved ? "bg-green-600 text-white" : "bg-red-500 text-white"
+              }`}
+            >
+              {saveLoading ? (
+                <ThreeCircles height="20" width="20" color="#fff" />
+              ) : isSaved ? (
+                <>
+                  Saved <TiTickOutline />
+                </>
+              ) : (
+                "Save"
+              )}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

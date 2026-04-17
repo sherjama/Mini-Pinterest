@@ -18,6 +18,9 @@ import AuthLayout from "./AuthLayout";
 import Input from "./Input";
 import SearchBar from "./SearchBar";
 import Dp from "./Dp";
+import { uploadFile } from "@/cloudinary/upload";
+import { deleteImage } from "@/cloudinary/delete";
+import { generateUrl as previewImage } from "@/cloudinary/previewImage";
 
 export {
   Header,
@@ -40,4 +43,7 @@ export {
   SearchBar,
   Dp,
   Input,
+  uploadFile,
+  deleteImage,
+  previewImage,
 };

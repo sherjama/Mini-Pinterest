@@ -1,59 +1,50 @@
-// react
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { LazyLoadImage } from "react-lazy-load-image-component";
 import "react-lazy-load-image-component/src/effects/blur.css";
-// appwrite
-import appwriteService from "../appwrite/config";
-// index file
+
 import { Dp } from "./index";
-// redux
 import { useNavigate } from "react-router-dom";
-import { useDispatch } from "react-redux";
-import { setLoading } from "../store/loadSlice";
 
 const Pin = ({ pinData }) => {
   const [loaded, setLoaded] = useState(false);
-  const dispatch = useDispatch();
   const navigate = useNavigate();
-
-  // set Loading value
-  useEffect(() => {
-    loaded ? dispatch(setLoading(false)) : dispatch(setLoading(true));
-  }, [loaded]);
 
   return (
     <div
-      className={`w-full mb-5 overflow-hidden rounded-xl flex justify-center items-center flex-col flex-wrap ${
-        !loaded ? "bg-gray-400" : ""
-      }`}
-      id={pinData.$id}
       onClick={() => navigate(`/pin/${pinData.$id}`)}
+      className="w-full mb-6 break-inside-avoid cursor-pointer"
     >
-      {/* pin image  */}
-      <LazyLoadImage
-        onLoad={() => setLoaded(true)}
-        id={pinData.$id}
-        key={pinData.$id}
-        // src={appwriteService.getFilePreview(pinData.image)}
-        src={`https://fra.cloud.appwrite.io/v1/storage/buckets/66d801490026bec522c7/files/${pinData.image}/view?project=66d70efe003c16e69527&mode=admin`}
-        alt={`Image ${pinData.$id}`}
-        effect="blur" // You can also use "opacity" or other effects
-        className="rounded-xl hover:scale-90 border-blue-400"
-      />
+      {/* IMAGE */}
+      <div className="relative overflow-hidden rounded-2xl bg-gray-200">
+        <LazyLoadImage
+          src={pinData.image}
+          alt={pinData.title}
+          effect="blur"
+          onLoad={() => setLoaded(true)}
+          className={`w-full object-cover transition duration-300 ${
+            loaded ? "opacity-100" : "opacity-0"
+          } hover:scale-[1.02]`}
+        />
 
-      {/* data  */}
-      {loaded && (
-        <div
-          className={`ml-2 mt-1 size w-full min-h-16 font-Secondary `}
-          id={pinData.$id}
-        >
-          <p className="font-medium text-sm text-[#323232]">{pinData.title}</p>
-          <div className="mt-1 flex items-center justify-start text-[#B4B4B4]">
-            <Dp className="size-8" cusstomDp={pinData.autherDp} />
-            <span className="text-sm underline">{pinData.auther}</span>
-          </div>
+        {/* Skeleton */}
+        {!loaded && (
+          <div className="w-full h-60 bg-gray-300 animate-pulse rounded-2xl"></div>
+        )}
+      </div>
+
+      {/* TEXT CONTENT */}
+      <div className="mt-2 px-1">
+        {/* Title */}
+        <p className="text-sm font-semibold text-gray-800 leading-tight line-clamp-2">
+          {pinData.title}
+        </p>
+
+        {/* Author */}
+        <div className="flex items-center gap-2 mt-2">
+          <Dp className="w-7 h-7" cusstomDp={pinData.autherDp} />
+          <span className="text-xs text-gray-600">{pinData.auther}</span>
         </div>
-      )}
+      </div>
     </div>
   );
 };

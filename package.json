@@ -17,6 +17,7 @@
     "appwrite": "^15.0.0",
     "bootstrap": "^5.3.3",
     "class-variance-authority": "^0.7.0",
+    "cloudinary": "^2.9.0",
     "clsx": "^2.1.1",
     "emailjs-com": "^3.2.0",
     "lucide-react": "^0.454.0",

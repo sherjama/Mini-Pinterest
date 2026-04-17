@@ -84,9 +84,9 @@ class AuthService {
   //   }
   // }
 
-  async getCurrentUser() {
+  async getCurrentUser(userId) {
     try {
-      return await this.account.get();
+      return await this.account.get(userId);
     } catch (error) {
       console.log("getCurrentUser :", error);
       throw error;

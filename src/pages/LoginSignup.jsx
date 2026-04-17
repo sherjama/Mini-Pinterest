@@ -9,14 +9,15 @@ import { useForm } from "react-hook-form";
 // react-router
 import { Link, useNavigate, useParams } from "react-router-dom";
 // components
-import { Logo, Input } from "../components/index";
+import { Logo, Input, uploadFile } from "../components/index";
 // authService
 import authservice from "../appwrite/auth";
-import appwriteService from "../appwrite/config";
 
 // react-redux redux-toolkit
 import { login, session as authSassion, setPref } from "../store/authSlice";
 import { useDispatch } from "react-redux";
+
+//cloudinary
 
 const LoginSignup = () => {
   // react-router-dom
@@ -51,8 +52,6 @@ const LoginSignup = () => {
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
-    console.log(file);
-
     setImage(file ? file : null);
     setPrevImage(file ? URL.createObjectURL(file) : null);
   };
@@ -64,9 +63,10 @@ const LoginSignup = () => {
     if (isLogin) {
       try {
         const data = await authservice.Login(email, password);
+        console.log(data);
 
         if (data) {
-          const userdata = await authservice.getCurrentUser();
+          const userdata = await authservice.getCurrentUser(data.userId);
 
           if (userdata) {
             const userData = {
@@ -107,12 +107,11 @@ const LoginSignup = () => {
 
         if (data) {
           const userdata = await authservice.getCurrentUser();
-          const file = image ? await appwriteService.uploadFile(image) : null;
+          const file = image ? await uploadFile(image) : null;
           if (file) {
-            const fileId = file.$id;
-            console.log(fileId);
             const prefs = await authservice.addPrefrencess({
-              displayPicture: fileId,
+              displayPicture: file.url,
+              displayPicturePublicId: file.publicId,
             });
 
             if (prefs) {
@@ -122,7 +121,8 @@ const LoginSignup = () => {
             }
           } else {
             const prefs = await authservice.addPrefrencess({
-              displayPicture: "670926b1000cb03e26cc",
+              displayPicture:
+                "https://res.cloudinary.com/dglztjs3z/image/upload/v1771251275/user_jlxwch.jpg",
             });
 
             if (prefs) {
@@ -155,9 +155,10 @@ const LoginSignup = () => {
 
           navigate("/home");
         }
-      } catch (e) {
-        setGlobelError(e.message);
-        e ? setToggle(false) : null;
+      } catch (error) {
+        setGlobelError(error.message);
+        error ? setToggle(false) : null;
+        console.log(error);
       }
     }
   };

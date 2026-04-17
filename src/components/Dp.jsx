@@ -7,11 +7,9 @@ const Dp = ({ className = "", cusstomDp = "", ...prop }) => {
 
   const { status, prefs } = authSlice;
 
-  const dp = prefs
-    ? `https://fra.cloud.appwrite.io/v1/storage/buckets/66d801490026bec522c7/files/${prefs.displayPicture}/view?project=66d70efe003c16e69527&mode=admin`
-    : "https://fra.cloud.appwrite.io/v1/storage/buckets/66d801490026bec522c7/files/670926b1000cb03e26cc/view?project=66d70efe003c16e69527&mode=admin";
+  const dp = status ? prefs.displayPicture : " ";
 
-  const costomDP = `https://fra.cloud.appwrite.io/v1/storage/buckets/66d801490026bec522c7/files/${cusstomDp}/view?project=66d70efe003c16e69527&mode=admin`;
+  // const costomDP = `https://fra.cloud.appwrite.io/v1/storage/buckets/66d801490026bec522c7/files/${cusstomDp}/view?project=66d70efe003c16e69527&mode=admin`;
 
   return (
     <div
@@ -20,11 +18,7 @@ const Dp = ({ className = "", cusstomDp = "", ...prop }) => {
       } flex items-center justify-center overflow-hidden`}
       {...prop}
     >
-      <img
-        className="object-cover w-full h-full "
-        src={dp ? (cusstomDp ? costomDP : dp) : null}
-        alt="dp"
-      />
+      <img className="object-cover w-full h-full " src={dp} alt="dp" />
     </div>
   );
 };

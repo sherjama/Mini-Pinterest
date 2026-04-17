@@ -1,390 +1,296 @@
-// icon
-import { IoIosAddCircleOutline } from "react-icons/io";
-import { ThreeCircles } from "react-loader-spinner";
-import { TbEdit } from "react-icons/tb";
-// react
 import React, { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useSelector } from "react-redux";
 import { useNavigate, useParams } from "react-router-dom";
-// index file
-import { Input, Button } from "../index";
+import { IoIosAddCircleOutline } from "react-icons/io";
+import { TbEdit } from "react-icons/tb";
+import { ThreeCircles } from "react-loader-spinner";
+
+import { uploadFile, deleteImage } from "../index";
 import appwriteService from "../../appwrite/config";
 
-const CreateUpdatePin = ({ pin }) => {
-  //   states
-  const [error, setError] = useState("");
-  const [isCreate, setIsCreate] = useState();
-  const [loading, setLoading] = useState(false);
-  const [image, setImage] = useState(null);
-  const [prevPin, setPrevpin] = useState(null);
-  const [tags, setTags] = useState([]);
-  const [inputTag, setInputTag] = useState("");
-  const [fileError, setFileError] = useState("");
-  const [post, setPost] = useState();
-
-  //   redux
-  const authSlice = useSelector((state) => state.authStatus);
-
-  const { userdata, prefs } = authSlice;
-
-  // react-router
+const CreateUpdatePin = () => {
   const { state } = useParams();
   const navigate = useNavigate();
-  //   react-hook-form
+
+  const { userdata, prefs } = useSelector((state) => state.authStatus);
+
+  const isCreate = state === "create";
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [image, setImage] = useState(null);
+  const [preview, setPreview] = useState(null);
+  const [post, setPost] = useState(null);
+
+  const [tags, setTags] = useState([]);
+  const [inputTag, setInputTag] = useState("");
+
   const {
     register,
     handleSubmit,
     formState: { errors },
     reset,
+    setValue,
   } = useForm();
 
+  // ================= FETCH POST =================
   useEffect(() => {
-    if (state === "create") {
-      setIsCreate(true);
-    } else {
-      setIsCreate(false);
-    }
+    if (!isCreate) fetchPost();
+  }, [state]);
 
-    if (state.length > 8) {
-      getPostDetail();
-    }
-    return () => {
-      setLoading(false);
-    };
-  }, [state, isCreate]);
-
-  //   function's
-  const getPostDetail = async () => {
+  const fetchPost = async () => {
     try {
-      const post = await appwriteService.GetPost(state.slice(7, state.length));
-      if (post) {
-        setPost(post);
-        const setImg = `https://fra.cloud.appwrite.io/v1/storage/buckets/66d801490026bec522c7/files/${post.image}/view?project=66d70efe003c16e69527&mode=admin`;
-        setImage ? setPrevpin(setImg) : null;
-      }
-    } catch (e) {
-      setError(e.message);
+      const postId = state.slice(7);
+      const res = await appwriteService.GetPost(postId);
+      console.log("state :", state);
+      console.log("postid :", postId);
+
+      setPost(res);
+      setPreview(res.image);
+      setValue("title", res.title);
+      setValue("description", res.description);
+      setTags(res.tag || []);
+    } catch (err) {
+      setError(err.message);
     }
   };
+
+  // ================= IMAGE =================
+  useEffect(() => {
+    return () => {
+      if (preview) URL.revokeObjectURL(preview);
+    };
+  }, [preview]);
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
-    setImage(file ? file : null);
-    setPrevpin(file ? URL.createObjectURL(file) : null);
+    if (!file) return;
+
+    setImage(file);
+    setPreview(URL.createObjectURL(file));
   };
 
-  const handleTagChange = (event, byAddButton) => {
-    const key = event.which || event.code;
-    const char = String.fromCharCode(key);
-    // console.log("sdjflk", event.type, char);
+  // ================= TAGS =================
+  const addTag = () => {
+    const trimmed = inputTag.trim();
+    if (!trimmed || tags.includes(trimmed)) return;
 
-    if (inputTag.length > 0) {
-      if (char === " ") {
-        inputTag.trim();
-        inputTag === " " ? null : setTags([...tags, inputTag]);
-        setInputTag("");
-      }
-      if (byAddButton) {
-        inputTag.trim();
-        inputTag === " " ? null : setTags([...tags, inputTag]);
-        setInputTag("");
-      }
+    setTags([...tags, trimmed]);
+    setInputTag("");
+  };
+
+  const handleTagKey = (e) => {
+    if (e.key === " ") {
+      e.preventDefault();
+      addTag();
     }
   };
 
-  const handleTagRemove = (tagToRemove) => {
-    setTags(tags.filter((tag) => tag !== tagToRemove));
+  const removeTag = (tag) => {
+    setTags(tags.filter((t) => t !== tag));
   };
 
+  // ================= SUBMIT =================
   const onSubmit = async (data) => {
     setLoading(true);
+    setError("");
 
-    data.tag = tags;
+    try {
+      let uploadedFile = null;
 
-    if (!isCreate) {
-      try {
-        const file = image ? await appwriteService.uploadFile(image) : null;
+      if (image) {
+        uploadedFile = await uploadFile(image);
+      }
 
-        if (file) {
-          appwriteService.deleteFile(post.image);
-          data.image = file.$id;
+      const payload = {
+        ...data,
+        tag: tags,
+        status: true,
+      };
+
+      // ================= UPDATE =================
+      if (!isCreate) {
+        if (uploadedFile) {
+          // delete old image
+          if (post.imagePublicID) {
+            await deleteImage(post.imagePublicID);
+          }
+
+          payload.imagePublicID = uploadedFile.publicId;
+          payload.image = uploadedFile.url; // ✅ FIX (IMPORTANT)
         } else {
-          data.image = post.image;
+          payload.imagePublicID = post.imagePublicID;
+          payload.image = post.image; // ✅ keep old image
         }
-        data.status = true;
-        const UpdatePin = await appwriteService.UpdatePost(post.$id, {
-          ...data,
+
+        await appwriteService.UpdatePost(post.$id, payload);
+        navigate("/home");
+      }
+
+      // ================= CREATE =================
+      else {
+        if (!uploadedFile) {
+          setError("Image is required");
+          return;
+        }
+
+        payload.imagePublicID = uploadedFile.publicId;
+        payload.image = uploadedFile.url; // ✅ FIX (IMPORTANT)
+
+        await appwriteService.CreatePost({
+          ...payload,
+          userId: userdata.$id,
+          auther: userdata.name,
+          autherDp: prefs.displayPicture,
         });
 
-        if (UpdatePin) {
-          navigate("/home");
-        }
-      } catch (e) {
-        setError(e.message);
-        setLoading(false);
+        navigate(`/profile/${userdata.$id}`);
       }
-    } else {
-      try {
-        const file = image ? await appwriteService.uploadFile(image) : null;
 
-        if (file === null) {
-          setFileError("image is required");
-          setLoading(false);
-        } else {
-          if (file) {
-            data.image = file.$id;
-            data.status = true;
-            const createPin = await appwriteService.CreatePost({
-              ...data,
-              userId: userdata.$id,
-              auther: userdata.name,
-              autherDp: prefs.displayPicture,
-            });
-
-            if (createPin) {
-              navigate(`/profile/${userdata.$id}`);
-            }
-          }
-        }
-      } catch (e) {
-        setError(e.message);
-        setLoading(false);
-      }
+      // ================= RESET =================
+      reset();
+      setTags([]);
+      setImage(null);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
-    console.log("Form Data: ", { ...data, image });
-
-    // Reset form after submission
-    reset();
-    setTags([]);
-    setImage(null);
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
-      <div className="bg-white p-8 rounded-lg shadow-lg max-w-lg w-full">
-        <h1 className="text-3xl font-semibold mb-6 text-center">
-          {error && (
-            <div className="alert alert-danger" role="alert">
-              {error}
-            </div>
-          )}
+    <form onSubmit={handleSubmit(onSubmit)}>
+      <div className="min-h-screen bg-[#f1f1f1] flex justify-center items-center px-4">
+        <div className="bg-white w-full max-w-5xl rounded-3xl shadow-lg p-6 flex gap-8">
+          {/* LEFT - IMAGE */}
+          <div className="w-1/2">
+            {preview ? (
+              <div className="relative group">
+                <img
+                  src={preview}
+                  className="w-full h-[450px] object-cover rounded-3xl"
+                />
 
-          {isCreate ? "Create a Pin" : "Edit Pin"}
-        </h1>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-          {/* Image Upload */}
-          <div className="flex flex-col items-center">
-            {image || post ? (
-              <img
-                src={prevPin}
-                alt="Preview"
-                className="w-full min-h-52 object-cover rounded-md mb-4"
-              />
+                {/* Edit overlay */}
+                <label className="absolute top-4 right-4 bg-white p-3 rounded-full shadow-md cursor-pointer opacity-0 group-hover:opacity-100 transition">
+                  <TbEdit size={18} />
+                  <input
+                    type="file"
+                    className="hidden"
+                    onChange={handleImageChange}
+                  />
+                </label>
+              </div>
             ) : (
-              <label className="w-full h-48 flex items-center justify-center border-2 border-dashed border-gray-300 rounded-md cursor-pointer hover:border-blue-500">
+              <label className="w-full h-[450px] flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-3xl cursor-pointer hover:border-gray-400 transition">
                 <input
                   type="file"
                   className="hidden"
-                  accept="image/png, image/jpg, image/jpeg, image/gif"
+                  accept="image/*"
                   onChange={handleImageChange}
                 />
-                <span className="text-gray-400">Click to upload an image</span>
+                <span className="text-gray-400 text-sm">
+                  Click to upload image
+                </span>
               </label>
             )}
-            {post && (
-              <>
-                <label
-                  htmlFor="file-upload"
-                  className="py-2 px-3 rounded-3xl  font-medium text-md mx-1 bg-red-500 text-white"
-                >
-                  <TbEdit />
-                </label>
-                <input
-                  id="file-upload"
-                  type="file"
-                  className="hidden"
-                  onChange={handleImageChange}
-                />
-              </>
-            )}
-            {fileError && (
-              <p className="text-red-500 text-sm mt-1">{fileError}</p>
-            )}
           </div>
 
-          {/* Title Input */}
-          <div>
-            <Input
-              type="text"
-              {...register("title", { required: "Title is required" })}
-              className={`mt-1 block w-full p-2 border ${
-                errors.title ? "border-red-500" : "border-gray-300"
-              } rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm`}
-              placeholder={post ? post.title : "Enter title"}
-              label=" Title"
-              labelStyle="block text-sm font-medium text-gray-700"
-            />
-            {errors.title && (
-              <p className="text-red-500 text-sm mt-1">
-                {errors.title.message}
-              </p>
-            )}
-          </div>
+          {/* RIGHT - FORM */}
+          <div className="w-1/2 flex flex-col justify-between">
+            {/* TOP */}
+            <div>
+              <h2 className="text-2xl font-semibold mb-5">
+                {isCreate ? "Create Pin" : "Edit Pin"}
+              </h2>
 
-          {/* Description Input */}
-          <div>
-            <label
-              htmlFor="description"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Description
-            </label>
-            <textarea
-              id="description"
-              {...register("description", {
-                required: "Description is required",
-              })}
-              className={`mt-1 block w-full p-2 border ${
-                errors.description ? "border-red-500" : "border-gray-300"
-              } rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm`}
-              placeholder={post ? post.description : "Enter description"}
-              rows="3"
-            />
-            {errors.description && (
-              <p className="text-red-500 text-sm mt-1">
-                {errors.description.message}
-              </p>
-            )}
-          </div>
+              {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
 
-          {/* Board Dropdown */}
-          <div>
-            <label
-              htmlFor="board"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Select Board &#40;optional&#41;
-            </label>
-            <select
-              id="board"
-              {...register("board", {
-                required: "Board selection is required",
-              })}
-              className={`mt-1 block w-full p-2 border ${
-                errors.board ? "border-red-500" : "border-gray-300"
-              } rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm`}
-              placeholder="jflsjlkajk"
-            >
-              {post && (
-                <>
-                  <option value={post ? post.board : null}>{post.board}</option>
-                  <option value="none">none</option>
-                </>
-              )}
-              {!post && <option value="none">-- Select Board --</option>}
-              <option
-                className={`${
-                  post ? `${post.board == "inspiration" ? "hidden" : ""}` : null
-                }`}
-                value="inspiration"
-              >
-                Inspiration
-              </option>
-              <option
-                className={`${
-                  post ? `${post.board == "Travel" ? "hidden" : ""}` : null
-                }`}
-                value="travel"
-              >
-                Travel
-              </option>
-              <option
-                className={`${
-                  post ? `${post.board == "food" ? "hidden" : ""}` : null
-                }`}
-                value="food"
-              >
-                Food
-              </option>
-              <option
-                className={`${
-                  post ? `${post.board == "home-decor" ? "hidden" : ""}` : null
-                }`}
-                value="home-decor"
-              >
-                Home Decor
-              </option>
-            </select>
-            {errors.board && (
-              <p className="text-red-500 text-sm mt-1">
-                {errors.board.message}
-              </p>
-            )}
-          </div>
-
-          {/* Tags Input */}
-          <div>
-            <label
-              htmlFor="tags"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Tags (Press space to add a tag)
-            </label>
-            <div className="flex items-center justify-between">
+              {/* TITLE */}
               <input
-                type="text"
-                id="tags"
-                className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                placeholder={post && !tags.length > 0 ? post.tag : "Enter tags"}
-                value={inputTag}
-                onChange={(e) => setInputTag(e.target.value)}
-                onKeyDown={handleTagChange}
+                {...register("title", { required: "Title required" })}
+                placeholder="Add a title"
+                className="w-full text-3xl font-bold outline-none border-b border-gray-200 pb-2 mb-5 placeholder-gray-400"
               />
-              <div onClick={(e) => handleTagChange(e, true)}>
-                <IoIosAddCircleOutline size={30} color="red" />
-              </div>
-            </div>
-            <div className="flex flex-wrap mt-2">
-              {tags.map((tag, index) => (
-                <div
-                  key={index}
-                  className="bg-blue-100 text-blue-600 px-3 py-1 rounded-full mr-2 mb-2 flex items-center"
-                >
-                  <span>{tag}</span>
+              {errors.title && (
+                <p className="text-red-500 text-sm mb-2">
+                  {errors.title.message}
+                </p>
+              )}
+
+              {/* DESCRIPTION */}
+              <textarea
+                {...register("description", {
+                  required: "Description required",
+                })}
+                placeholder="Tell everyone what your Pin is about"
+                rows="4"
+                className="w-full p-3 rounded-xl bg-gray-100 outline-none resize-none text-sm"
+              />
+              {errors.description && (
+                <p className="text-red-500 text-sm mt-1">
+                  {errors.description.message}
+                </p>
+              )}
+
+              {/* TAGS */}
+              <div className="mt-5">
+                <div className="flex items-center gap-2 bg-gray-100 p-2 rounded-xl">
+                  <input
+                    value={inputTag}
+                    onChange={(e) => setInputTag(e.target.value)}
+                    onKeyDown={handleTagKey}
+                    placeholder="Add tags"
+                    className="flex-1 bg-transparent outline-none text-sm"
+                  />
                   <button
                     type="button"
-                    className="ml-2 text-red-500"
-                    onClick={() => handleTagRemove(tag)}
+                    onClick={addTag}
+                    className="text-red-500 hover:scale-110 transition"
                   >
-                    &times;
+                    <IoIosAddCircleOutline size={24} />
                   </button>
                 </div>
-              ))}
-            </div>
-          </div>
 
-          {/* Submit Button */}
-          <Button
-            type="submit"
-            className="m-auto relative"
-            text={`${loading ? "" : `${isCreate ? "submit" : "Edit"}`}`}
-          >
-            {loading && (
-              <ThreeCircles
-                visible={true}
-                height="30"
-                width="30"
-                color="#ffff"
-                ariaLabel="three-circles-loading"
-                wrapperStyle={{}}
-                wrapperClass=""
-              />
-            )}
-          </Button>
-        </form>
+                {/* TAG LIST */}
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {tags.map((tag, i) => (
+                    <span
+                      key={i}
+                      className="bg-gray-200 px-3 py-1 rounded-full text-sm flex items-center gap-1"
+                    >
+                      {tag}
+                      <button
+                        type="button"
+                        onClick={() => removeTag(tag)}
+                        className="text-gray-600 hover:text-red-500"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* BUTTON */}
+            <button
+              type="submit"
+              className="mt-6 w-full bg-red-500 hover:bg-red-600 text-white py-3 rounded-full font-semibold flex justify-center items-center transition"
+            >
+              {loading ? (
+                <ThreeCircles height="25" width="25" color="#fff" />
+              ) : isCreate ? (
+                "Create"
+              ) : (
+                "Update"
+              )}
+            </button>
+          </div>
+        </div>
       </div>
-    </div>
+    </form>
   );
 };
 
