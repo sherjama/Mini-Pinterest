@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
 import { useNavigate, useParams } from "react-router-dom";
 import { IoIosAddCircleOutline } from "react-icons/io";
 import { TbEdit } from "react-icons/tb";
@@ -8,6 +8,7 @@ import { ThreeCircles } from "react-loader-spinner";
 
 import { uploadFile, deleteImage } from "../index";
 import appwriteService from "../../appwrite/config";
+import { triggerReload } from "@/store/pinSlice";
 
 const CreateUpdatePin = () => {
   const { state } = useParams();

@@ -16,7 +16,7 @@ const Home = () => {
   const dispatch = useDispatch();
   const { status } = useSelector((state) => state.authStatus);
   const StoredPins = useSelector((state) => state.pins.pins);
-  const { isSearching, searchResult } = useSelector((state) => state.pins);
+  const { isSearching, searchResult , reload} = useSelector((state) => state.pins);
 
   // functions
   const Listposts = async () => {
@@ -33,7 +33,7 @@ const Home = () => {
     if (pins) {
       dispatch(addPins(pins));
     }
-  }, [pins, setPins]);
+  }, [dispatch,reload]);
 
   //  conditional Rendering :isSearching?
   if (isSearching) {

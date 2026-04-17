@@ -7,6 +7,7 @@ const initialState = {
   isSearching: false,
   savedPins: [],
   savedPinsDATA: [],
+  reload: 1,
 };
 
 const pinSlice = createSlice({
@@ -35,6 +36,9 @@ const pinSlice = createSlice({
     displaySaved: (state, action) => {
       state.savedPinsDATA = action.payload;
     },
+    triggerReload:(state,action)=>{
+      state.reload += 1
+    }
   },
 });
 
@@ -45,6 +49,7 @@ export const {
   deleteSearchPins,
   saved,
   displaySaved,
+  triggerReload
 } = pinSlice.actions;
 
 export default pinSlice.reducer;
