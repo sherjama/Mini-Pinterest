@@ -9,6 +9,7 @@ export async function uploadFile(file) {
   formData.append("upload_preset", uploadPresetName);
 
   try {
+    console.log("preset:", uploadPresetName);
     const response = await fetch(
       `https://api.cloudinary.com/v1_1/${cloudName}/upload`,
       {
